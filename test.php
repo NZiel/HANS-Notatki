@@ -1,0 +1,309 @@
+<?php
+session_start();
+if (!isset($_SESSION["user_id"])) {
+    header("Location: login.php");
+    exit;
+}
+?>
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>System Notatek Studenckich</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f3f4f6;
+      padding: 20px;
+    }
+
+    h1 {
+      text-align: center;
+      color: #2563eb;
+      margin-bottom: 20px;
+    }
+
+    .top-bar {
+      text-align: right;
+      margin-bottom: 20px;
+    }
+
+    .top-bar a {
+      text-decoration: none;
+      color: #2563eb;
+      font-weight: bold;
+      background: #e0e7ff;
+      padding: 6px 12px;
+      border-radius: 8px;
+    }
+
+    .form {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      max-width: 700px;
+      margin: 0 auto 30px auto;
+    }
+
+    input, textarea {
+      width: 100%;
+      padding: 10px;
+      margin: 6px 0;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    button {
+      background: #2563eb;
+      color: white;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: 0.2s;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+
+    .tag-folder {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+      padding: 15px;
+      margin-bottom: 20px;
+    }
+
+    .tag-header {
+      background: #2563eb;
+      color: white;
+      padding: 10px;
+      border-radius: 8px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+
+    .note {
+      background: #f9fafb;
+      border-left: 4px solid #2563eb;
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .note:hover {
+      background: #eef2ff;
+    }
+
+    .note small {
+      color: #666;
+      font-size: 13px;
+    }
+
+    /* Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal-content {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      max-width: 600px;
+      width: 90%;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+      position: relative;
+    }
+
+    .close-btn {
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      font-size: 22px;
+      color: #333;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .close-btn:hover {
+      color: red;
+    }
+
+    .modal-content h3 {
+      color: #2563eb;
+      margin-bottom: 10px;
+    }
+
+    .modal-content p {
+      font-size: 16px;
+      line-height: 1.5;
+      white-space: pre-line;
+    }
+
+    .file-link {
+      display: inline-block;
+      margin-top: 10px;
+      background: #2563eb;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .file-link:hover {
+      background: #1d4ed8;
+    }
+  </style>
+</head>
+<body>
+  <div class="top-bar">
+    <strong>Zalogowany jako:</strong> <?= htmlspecialchars($_SESSION["username"]) ?> |
+    <a href="logout.php">Wyloguj</a>
+  </div>
+
+  <h1>📚 System Notatek Studenckich</h1>
+
+  <div class="form">
+    <textarea id="noteText" placeholder="Treść notatki..." required></textarea>
+    <input type="text" id="noteTags" placeholder="Tagi (np. matematyka, fizyka)" required />
+    <input type="file" id="noteFile" accept=".pdf,.jpg,.png" />
+    <button onclick="addNote()">Dodaj notatkę</button>
+  </div>
+
+  <div id="foldersContainer"></div>
+
+  <!-- Modal -->
+  <div id="noteModal" class="modal">
+    <div class="modal-content">
+      <span class="close-btn" onclick="closeModal()">&times;</span>
+      <h3 id="modalTag"></h3>
+      <p id="modalText"></p>
+      <button id="openFileBtn" class="file-link" style="display:none;">📂 Otwórz załącznik</button>
+    </div>
+  </div>
+
+  <script>
+    const folders = {};
+
+    async function addNote() {
+      const text = document.getElementById("noteText").value.trim();
+      const tags = document.getElementById("noteTags").value
+        .split(",")
+        .map((t) => t.trim().toLowerCase())
+        .filter(Boolean);
+      const fileInput = document.getElementById("noteFile");
+      const file = fileInput.files[0];
+
+      if (!text && !file) {
+        alert("Dodaj treść lub plik!");
+        return;
+      }
+
+      if (tags.length === 0) {
+        alert("Dodaj przynajmniej jeden tag!");
+        return;
+      }
+
+      let fileBlob = null;
+      let fileName = null;
+
+      if (file) {
+        fileBlob = file;
+        fileName = file.name;
+      }
+
+      const note = {
+        id: Date.now(),
+        text,
+        fileName,
+        fileBlob
+      };
+
+      tags.forEach((tag) => {
+        if (!folders[tag]) folders[tag] = [];
+        folders[tag].unshift(note);
+      });
+
+      renderFolders();
+
+      document.getElementById("noteText").value = "";
+      document.getElementById("noteTags").value = "";
+      fileInput.value = "";
+    }
+
+    function renderFolders() {
+      const container = document.getElementById("foldersContainer");
+      container.innerHTML = "";
+
+      Object.keys(folders).forEach((tag) => {
+        const folderDiv = document.createElement("div");
+        folderDiv.className = "tag-folder";
+
+        const header = document.createElement("div");
+        header.className = "tag-header";
+        header.textContent = `#${tag}`;
+        folderDiv.appendChild(header);
+
+        folders[tag].forEach((note) => {
+          const noteDiv = document.createElement("div");
+          noteDiv.className = "note";
+          noteDiv.innerHTML = `
+            <p>${note.text.length > 60 ? note.text.substring(0, 60) + "..." : note.text}</p>
+            ${note.fileName ? `<small>📎 ${note.fileName}</small>` : ""}
+          `;
+          noteDiv.addEventListener("click", () => openModal(tag, note));
+          folderDiv.appendChild(noteDiv);
+        });
+
+        container.appendChild(folderDiv);
+      });
+    }
+
+    // Modal
+    function openModal(tag, note) {
+      document.getElementById("modalTag").textContent = `#${tag}`;
+      document.getElementById("modalText").textContent = note.text || "(brak treści)";
+      const openFileBtn = document.getElementById("openFileBtn");
+
+      if (note.fileBlob) {
+        openFileBtn.style.display = "inline-block";
+        openFileBtn.textContent = `📂 Otwórz plik (${note.fileName})`;
+        openFileBtn.onclick = () => {
+          const blobUrl = URL.createObjectURL(note.fileBlob);
+          window.open(blobUrl, "_blank");
+        };
+      } else {
+        openFileBtn.style.display = "none";
+      }
+
+      document.getElementById("noteModal").style.display = "flex";
+    }
+
+    function closeModal() {
+      document.getElementById("noteModal").style.display = "none";
+    }
+
+    window.onclick = function (event) {
+      const modal = document.getElementById("noteModal");
+      if (event.target === modal) closeModal();
+    };
+  </script>
+</body>
+</html>
