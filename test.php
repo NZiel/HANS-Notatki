@@ -5,74 +5,66 @@ if (!isset($_SESSION["user_id"])) {
     exit;
 }
 
-// 1. DANE DO POŁĄCZENIA Z BAZĄ DANYCH (UZUPEŁNIJ!)
+// 1. DANE DO POŁĄCZENIA Z BAZĄ DANYCH
 $servername = "localhost";
 $username = "root"; 
 $password = "";
 $dbname = "hans";
 
-$tags = []; // Tablica do przechowywania tagów
+$tags = []; 
+$user_notes = [];
+// ZAPISUJEMY ID ZALOGOWANEGO UŻYTKOWNIKA DO UŻYCIA W JS
+$loggedInUserId = $_SESSION["user_id"];
 
+// JEDEN GŁÓWNY BLOK TRY...CATCH
 try {
-    // Utworzenie połączenia
     $conn = new mysqli($servername, $username, $password, $dbname);
 
-    // Sprawdzenie połączenia
     if ($conn->connect_error) {
         throw new Exception("Błąd połączenia z bazą danych: " . $conn->connect_error);
     }
 
-    // 2. POBRANIE TAGÓW Z TABELI 'tags'
-    // POPRAWA: Zmieniono nieprawidłowy SELECT na: SELECT DISTINCT name FROM tags
-    // Nazwy kolumn nie powinny być ujęte w apostrofy ('name'). Używamy `name` (backtick) lub po prostu name.
-    $sql = "SELECT DISTINCT name FROM tags ORDER BY name ASC";
-    $result = $conn->query($sql);
+    // 2. POBRANIE TAGÓW (bez zmian)
+    $sql_tags = "SELECT DISTINCT name FROM tags ORDER BY name ASC";
+    $result_tags = $conn->query($sql_tags);
 
-    if ($result && $result->num_rows > 0) {
-        while ($row = $result->fetch_assoc()) {
-            // POPRAWA: Upewnienie się, że odwołujemy się do klucza 'name' w tablicy $row
+    if ($result_tags && $result_tags->num_rows > 0) {
+        while ($row = $result_tags->fetch_assoc()) {
             $tags[] = htmlspecialchars($row['name']);
         }
     }
-    } catch (Exception $e) {
-    // Można zalogować błąd serwera
-}
-  
-$user_notes = [];
-
-try {
-    $conn = new mysqli($servername, $username, $password, $dbname);
-
-    if ($conn->connect_error) {
-        throw new Exception("Błąd połączenia z bazą danych.");
-    }
     
-    $user_id = $_SESSION["user_id"];
-
-    // 3. POBRANIE NOTATEK DANEGO UŻYTKOWNIKA
-    // Pobieramy wszystkie notatki (id, title, content) dla zalogowanego użytkownika, 
-    // sortując je malejąco według daty utworzenia (najnowsze pierwsze).
-    $sql_notes = "SELECT id, title, content FROM notes WHERE user_id = ? ORDER BY created_at DESC";
+    // 3. POBRANIE NOTATEK DLA WSZYSTKICH UŻYTKOWNIKÓW
+    
+    // POPRAWKA: Usunięto warunek "WHERE user_id = ?"
+    // DODANO: Pobieranie "user_id" dla każdej notatki
+    $sql_notes = "SELECT id, user_id, title, content, file_path FROM notes ORDER BY created_at DESC";
     $stmt_notes = $conn->prepare($sql_notes);
-    $stmt_notes->bind_param("i", $user_id);
+    
+    // Nie potrzebujemy już bindowania $user_id do tego zapytania
+    // $stmt_notes->bind_param("i", $user_id); 
+    
     $stmt_notes->execute();
     $result_notes = $stmt_notes->get_result();
-    
+
     while ($row = $result_notes->fetch_assoc()) {
-        // Przechowujemy dane notatki, używając 'title' jako 'tag'
         $user_notes[] = [
             'id' => $row['id'],
+            'author_id' => $row['user_id'], // Nowe pole: ID autora
             'tag' => htmlspecialchars($row['title']), 
-            'text' => htmlspecialchars($row['content'])
+            'text' => htmlspecialchars($row['content']),
+            'filePath' => htmlspecialchars($row['file_path']) 
         ];
     }
-
+    
     $stmt_notes->close();
     $conn->close();
 
 } catch (Exception $e) {
-    // Można zalogować błąd serwera
-}
+    // Obsługa błędów
+} 
+
+$all_tags_json = json_encode($tags); 
 
 ?>
 <!DOCTYPE html>
@@ -118,18 +110,12 @@ try {
         }
 
         input[type="text"], textarea, select {
-    width: 100%;
-    padding: 10px;
-    margin: 6px 0;
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    font-size: 14px;
-        }
-
-        /* Styl dla listy wielokrotnego wyboru */
-        select[multiple] {
-            min-height: 150px;
-            overflow-y: auto;
+            width: 100%;
+            padding: 10px;
+            margin: 6px 0;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 14px;
         }
 
         button {
@@ -246,6 +232,42 @@ try {
         .file-link:hover {
             background: #1d4ed8;
         }
+
+        /* Style dla trybu edycji w modalu */
+        #modalEdit label { 
+            display: block; 
+            margin-top: 10px; 
+            font-weight: bold; 
+            font-size: 14px;
+        }
+        #modalEdit textarea, #modalEdit select { 
+            width: 100%; 
+            padding: 8px; 
+            margin-top: 5px; 
+            border-radius: 8px; 
+            border: 1px solid #ccc; 
+            font-size: 14px;
+        }
+        #modalEdit input[type="file"] { 
+            margin-top: 5px; 
+            font-size: 13px;
+        }
+
+        /* Style dla nowych przycisków */
+        .button-edit { 
+            background: #f59e0b; /* Żółty */ 
+            margin-top: 15px; 
+        }
+        .button-edit:hover { 
+            background: #d97706; 
+        }
+        .button-cancel { 
+            background: #6b7280; /* Szary */ 
+            margin-left: 10px;
+        }
+        .button-cancel:hover { 
+            background: #4b5563; 
+        }
     </style>
 </head>
 <body>
@@ -257,19 +279,21 @@ try {
     <h1>📚 System Notatek Studenckich</h1>
 
     <div class="form">
-        <textarea id="noteText" placeholder="Treść notatki..." required></textarea> 
+        <textarea id="noteText" placeholder="Treść notatki..." required></textarea>
+        
         <label for="noteTags" style="display: block; margin-top: 10px; font-weight: bold;">Wybierz tag:</label>
         <select id="noteTags" required>
-        <option value="" disabled selected>-- Wybierz tag --</option> 
-        <?php if (empty($tags)): ?>
-        <option value="" disabled>Brak tagów do wyboru. Dodaj je w bazie danych!</option>
-        <?php else: ?>
-        <?php foreach ($tags as $tag): ?>
-            <option value="<?= $tag ?>"><?= $tag ?></option>
-        <?php endforeach; ?>
-    <?php endif; ?>
-</select>
-        <input type="file" id="noteFile" accept=".pdf,.jpg,.png" />
+            <option value="" disabled selected>-- Wybierz tag --</option> 
+            <?php if (empty($tags)): ?>
+                <option value="" disabled>Brak tagów do wyboru. Dodaj je w bazie danych!</option>
+            <?php else: ?>
+                <?php foreach ($tags as $tag): ?>
+                    <option value="<?= $tag ?>"><?= $tag ?></option>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </select>
+        
+        <input type="file" id="noteFile" accept=".pdf,.jpg,.jpeg,.png,.gif,.txt,.doc,.docx" />
         <button onclick="addNote()">Dodaj notatkę</button>
     </div>
 
@@ -278,107 +302,119 @@ try {
     <div id="noteModal" class="modal">
         <div class="modal-content">
             <span class="close-btn" onclick="closeModal()">&times;</span>
-            <h3 id="modalTag"></h3>
-            <p id="modalText"></p>
-            <button id="openFileBtn" class="file-link" style="display:none;">📂 Otwórz załącznik</button>
+
+            <div id="modalView">
+                <h3 id="modalTag"></h3>
+                <p id="modalText"></p>
+                <button id="openFileBtn" class="file-link" style="display:none;">📂 Pobierz plik</button>
+                
+                <button id="editBtn" onclick="switchToEditMode()" class="button-edit">✏️ Edytuj</button>
+            </div>
+
+            <div id="modalEdit" style="display: none;">
+                <h3>Edytuj Notatkę</h3>
+                
+                <input type="hidden" id="editNoteId">
+                
+                <label for="editTagSelect">Tag:</label>
+                <select id="editTagSelect" required></select>
+                
+                <label for="editNoteText">Treść:</label>
+                <textarea id="editNoteText" rows="5"></textarea>
+                
+                <label for="editNoteFile">Zastąp plik (opcjonalne):</label>
+                <input type="file" id="editNoteFile" accept=".pdf,.jpg,.jpeg,.png,.gif,.txt,.doc,.docx">
+                <small id="currentFileDisplay" style="display: block; color: #555; margin-top: 5px;"></small>
+
+                <button onclick="saveChanges()">Zapisz zmiany</button>
+                <button onclick="switchToViewMode()" class="button-cancel">Anuluj</button>
+            </div>
         </div>
     </div>
 
-   <script>
-    // 1. Inicjalizacja folderów notatkami z PHP
-    const userNotesFromDB = <?= json_encode($user_notes); ?>;
-    const folders = {}; // Nadal używamy folders do grupowania, ale jest budowany z danych DB
 
-    // Funkcja grupująca notatki pobrane z bazy
+   <script>
+    // 1. Zmienne globalne
+    const userNotesFromDB = <?= json_encode($user_notes); ?>;
+    const allTagsFromDB = <?= $all_tags_json; ?>; 
+    // NOWOŚĆ: Przekazanie ID zalogowanego użytkownika do JS
+    const loggedInUserId = <?= $loggedInUserId; ?>;
+    
+    const folders = {};
+    let currentNote = null; 
+
+    // 2. Inicjalizacja folderów notatkami z PHP
     function initializeFolders(notes) {
         notes.forEach(note => {
-            const tag = note.tag.toLowerCase(); // Używamy 'title' z bazy jako tag
+            const tag = note.tag.toLowerCase(); 
             if (!folders[tag]) folders[tag] = [];
+            
             folders[tag].push({
                 id: note.id,
+                author_id: note.author_id, // NOWOŚĆ: Przechowujemy ID autora
                 text: note.text,
-                fileName: null, // Pliki tymczasowo nieobsługiwane
-                fileBlob: null
+                fileName: note.filePath ? note.filePath.split('/').pop() : null,
+                filePath: note.filePath
             });
         });
         renderFolders();
     }
     
-    // Uruchomienie inicjalizacji po załadowaniu skryptu
     initializeFolders(userNotesFromDB);
 
-    // 2. Funkcja do dodawania notatki (teraz asynchronicznie)
+    // 3. Funkcja dodawania nowej notatki (bez zmian)
     async function addNote() {
         const text = document.getElementById("noteText").value.trim();
         const tagSelect = document.getElementById("noteTags"); 
         const fileInput = document.getElementById("noteFile");
-        
         const selectedTag = tagSelect.value.trim(); 
         const tags = selectedTag ? [selectedTag] : []; 
         
-        // WYŁĄCZENIE OBSŁUGI PLIKÓW
-        if (fileInput.files.length > 0) {
-            alert("Obsługa załączników została tymczasowo wyłączona.");
-            fileInput.value = "";
+        if (!text && !fileInput.files[0]) {
+            alert("Dodaj treść lub plik!");
             return;
         }
-
-        if (!text) {
-            alert("Dodaj treść notatki!");
-            return;
-        }
-
         if (tags.length === 0) {
             alert("Wybierz tag z listy!"); 
             return;
         }
 
-        // Przygotowanie danych do wysłania
         const formData = new FormData();
         formData.append('text', text);
         formData.append('tag', selectedTag); 
+        if (fileInput.files.length > 0) {
+            formData.append('noteFile', fileInput.files[0]);
+        }
 
         try {
-            const response = await fetch('save_note.php', {
-                method: 'POST',
-                body: formData
-            });
-            
+            const response = await fetch('save_note.php', { method: 'POST', body: formData });
             const result = await response.json();
-
             if (result.success) {
-                alert("Notatka została zapisana w bazie danych!");
-                
-                // Po zapisie, czyścimy formularz i ODŚWIEŻAMY STRONĘ, aby zobaczyć nową notatkę
-                document.getElementById("noteText").value = "";
-                tagSelect.selectedIndex = 0; 
-                
-                window.location.reload(); // Najprostszy sposób, aby ponownie wczytać notatki z DB
+                alert("Notatka została zapisana pomyślnie!");
+                window.location.reload(); 
             } else {
                 alert("Błąd podczas zapisywania notatki: " + result.message);
             }
-
         } catch (error) {
             console.error('Błąd sieci:', error);
             alert("Wystąpił błąd komunikacji z serwerem.");
         }
     }
 
-    // 3. Funkcja renderująca (zostaje taka sama, działa na obiekcie 'folders')
+    // 4. Funkcja renderująca foldery (bez zmian)
     function renderFolders() {
         const container = document.getElementById("foldersContainer");
         container.innerHTML = "";
+        const sortedTags = Object.keys(folders).sort();
 
-        Object.keys(folders).forEach((tag) => {
+        sortedTags.forEach((tag) => {
             const folderDiv = document.createElement("div");
             folderDiv.className = "tag-folder";
-
             const header = document.createElement("div");
             header.className = "tag-header";
             header.textContent = `#${tag}`;
             folderDiv.appendChild(header);
 
-            // Najnowsze notatki z bazy są pierwsze (dzięki ORDER BY DESC w PHP)
             folders[tag].forEach((note) => {
                 const noteDiv = document.createElement("div");
                 noteDiv.className = "note";
@@ -389,35 +425,138 @@ try {
                 noteDiv.addEventListener("click", () => openModal(tag, note));
                 folderDiv.appendChild(noteDiv);
             });
-
             container.appendChild(folderDiv);
         });
     }
 
-    // 4. Modal (pozostaje bez zmian)
+    // 5. Logika Modala (Widok / Edycja)
+    
+    // ZMIANA: openModal musi teraz sprawdzać uprawnienia
     function openModal(tag, note) {
+        currentNote = note; 
+
+        // Ustawiamy tryb widoku
         document.getElementById("modalTag").textContent = `#${tag}`;
         document.getElementById("modalText").textContent = note.text || "(brak treści)";
         const openFileBtn = document.getElementById("openFileBtn");
+        const editBtn = document.getElementById("editBtn");
 
-        // Pliki są na razie wyłączone, więc ten kod będzie wyświetlał tylko tekst
-        if (note.fileBlob) {
-             // ... logika dla plików (obecnie nieaktywna)
+        // Logika pobierania pliku
+        if (note.filePath) {
+            openFileBtn.style.display = "inline-block";
+            openFileBtn.textContent = `📂 Pobierz plik (${note.fileName})`;
+            openFileBtn.onclick = () => { window.open(note.filePath, "_blank"); };
         } else {
             openFileBtn.style.display = "none";
         }
-
+        
+        // KLUCZOWA ZMIANA: Pokaż przycisk "Edytuj" tylko jeśli ID autora zgadza się z ID zalogowanego
+        if (note.author_id === loggedInUserId) {
+            editBtn.style.display = "inline-block"; // Pokaż przycisk
+        } else {
+            editBtn.style.display = "none"; // Ukryj przycisk
+        }
+        
+        switchToViewMode(); 
         document.getElementById("noteModal").style.display = "flex";
     }
-
+    
     function closeModal() {
         document.getElementById("noteModal").style.display = "none";
+        currentNote = null; 
     }
-
+    
     window.onclick = function (event) {
         const modal = document.getElementById("noteModal");
         if (event.target === modal) closeModal();
     };
+
+    function switchToViewMode() {
+        document.getElementById("modalView").style.display = "block";
+        document.getElementById("modalEdit").style.display = "none";
+    }
+
+    // Reszta funkcji (switchToEditMode, saveChanges) pozostaje bez zmian,
+    // ponieważ skrypt update_note.php i tak zweryfikuje autora po stronie serwera.
+    
+    function switchToEditMode() {
+        if (!currentNote) return;
+
+        document.getElementById("editNoteId").value = currentNote.id;
+        document.getElementById("editNoteText").value = currentNote.text;
+        
+        const tagSelect = document.getElementById("editTagSelect");
+        tagSelect.innerHTML = ""; 
+        
+        const currentTagFromNote = (Object.keys(folders).find(key => folders[key].some(n => n.id === currentNote.id)) || '');
+
+        allTagsFromDB.forEach(tag => {
+            const option = document.createElement("option");
+            option.value = tag;
+            option.textContent = tag;
+            if (tag.toLowerCase() === currentTagFromNote.toLowerCase()) {
+                option.selected = true;
+            }
+            tagSelect.appendChild(option);
+        });
+
+        const fileDisplay = document.getElementById("currentFileDisplay");
+        if (currentNote.fileName) {
+            fileDisplay.textContent = `Obecny plik: ${currentNote.fileName}`;
+        } else {
+            fileDisplay.textContent = "Brak załącznika.";
+        }
+        document.getElementById("editNoteFile").value = ""; 
+
+        document.getElementById("modalView").style.display = "none";
+        document.getElementById("modalEdit").style.display = "block";
+    }
+
+    async function saveChanges() {
+        const noteId = document.getElementById("editNoteId").value;
+        const newText = document.getElementById("editNoteText").value.trim();
+        const newTag = document.getElementById("editTagSelect").value;
+        const fileInput = document.getElementById("editNoteFile");
+
+        if (!newText && !fileInput.files[0]) {
+            if (!newTag) {
+                 alert("Tag nie może być pusty!");
+                 return;
+            }
+        }
+        if(!newTag){
+            alert("Tag nie może być pusty!");
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('note_id', noteId);
+        formData.append('text', newText);
+        formData.append('tag', newTag);
+        
+        if (fileInput.files.length > 0) {
+            formData.append('noteFile', fileInput.files[0]);
+        }
+
+        try {
+            const response = await fetch('update_note.php', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                alert("Notatka zaktualizowana!");
+                window.location.reload(); 
+            } else {
+                alert("Błąd aktualizacji: " + result.message);
+            }
+        } catch (error) {
+            console.error("Błąd fetch:", error);
+            alert("Błąd komunikacji z serwerem (update_note.php).");
+        }
+    }
 </script>
 </body>
 </html>
