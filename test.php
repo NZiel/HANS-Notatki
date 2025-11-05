@@ -13,8 +13,9 @@ $dbname = "hans";
 
 $tags = []; 
 $user_notes = [];
-// ZAPISUJEMY ID ZALOGOWANEGO UŻYTKOWNIKA DO UŻYCIA W JS
 $loggedInUserId = $_SESSION["user_id"];
+// Domyślny tytuł strony
+$pageTitle = "📚 Wszystkie Notatki"; 
 
 // JEDEN GŁÓWNY BLOK TRY...CATCH
 try {
@@ -24,7 +25,7 @@ try {
         throw new Exception("Błąd połączenia z bazą danych: " . $conn->connect_error);
     }
 
-    // 2. POBRANIE TAGÓW (bez zmian)
+    // 2. POBRANIE TAGÓW
     $sql_tags = "SELECT DISTINCT name FROM tags ORDER BY name ASC";
     $result_tags = $conn->query($sql_tags);
 
@@ -34,23 +35,16 @@ try {
         }
     }
     
-    // 3. POBRANIE NOTATEK DLA WSZYSTKICH UŻYTKOWNIKÓW
-    
-    // POPRAWKA: Usunięto warunek "WHERE user_id = ?"
-    // DODANO: Pobieranie "user_id" dla każdej notatki
+    // 3. POBRANIE WSZYSTKICH NOTATEK (filtrowanie w JS)
     $sql_notes = "SELECT id, user_id, title, content, file_path FROM notes ORDER BY created_at DESC";
     $stmt_notes = $conn->prepare($sql_notes);
-    
-    // Nie potrzebujemy już bindowania $user_id do tego zapytania
-    // $stmt_notes->bind_param("i", $user_id); 
-    
     $stmt_notes->execute();
     $result_notes = $stmt_notes->get_result();
 
     while ($row = $result_notes->fetch_assoc()) {
         $user_notes[] = [
             'id' => $row['id'],
-            'author_id' => $row['user_id'], // Nowe pole: ID autora
+            'author_id' => $row['user_id'], 
             'tag' => htmlspecialchars($row['title']), 
             'text' => htmlspecialchars($row['content']),
             'filePath' => htmlspecialchars($row['file_path']) 
@@ -61,7 +55,7 @@ try {
     $conn->close();
 
 } catch (Exception $e) {
-    // Obsługa błędów
+    // Obsługa błędów (np. logowanie)
 } 
 
 $all_tags_json = json_encode($tags); 
@@ -72,7 +66,7 @@ $all_tags_json = json_encode($tags);
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>System Notatek Studenckich</title>
+    <title><?= $pageTitle ?></title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -89,16 +83,68 @@ $all_tags_json = json_encode($tags);
         .top-bar {
             text-align: right;
             margin-bottom: 20px;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
         }
 
-        .top-bar a {
-            text-decoration: none;
+        .top-bar strong {
+            margin-right: 15px;
+        }
+        
+        /* === STYLES FOR DROPDOWN MENU === */
+        .dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .dropbtn {
+            background-color: #e0e7ff;
             color: #2563eb;
+            padding: 8px 12px;
+            font-size: 20px;
             font-weight: bold;
-            background: #e0e7ff;
-            padding: 6px 12px;
+            border: none;
+            cursor: pointer;
             border-radius: 8px;
         }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            right: 0;
+            background-color: #ffffff;
+            min-width: 200px;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 100;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .dropdown-content a {
+            color: black;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+            font-size: 14px;
+        }
+
+        .dropdown-content a:hover {
+            background-color: #f1f1f1;
+        }
+        
+        .dropdown-content a.logout-link {
+            color: #ef4444;
+            font-weight: bold;
+        }
+        .dropdown-content a.logout-link:hover {
+            background-color: #fee2e2;
+        }
+
+        .show {
+            display: block;
+        }
+        /* === END DROPDOWN STYLES === */
 
         .form {
             background: white;
@@ -169,7 +215,6 @@ $all_tags_json = json_encode($tags);
             font-size: 13px;
         }
 
-        /* Modal */
         .modal {
             display: none;
             position: fixed;
@@ -233,7 +278,6 @@ $all_tags_json = json_encode($tags);
             background: #1d4ed8;
         }
 
-        /* Style dla trybu edycji w modalu */
         #modalEdit label { 
             display: block; 
             margin-top: 10px; 
@@ -253,16 +297,15 @@ $all_tags_json = json_encode($tags);
             font-size: 13px;
         }
 
-        /* Style dla nowych przycisków */
         .button-edit { 
-            background: #f59e0b; /* Żółty */ 
+            background: #f59e0b; 
             margin-top: 15px; 
         }
         .button-edit:hover { 
             background: #d97706; 
         }
         .button-cancel { 
-            background: #6b7280; /* Szary */ 
+            background: #6b7280;
             margin-left: 10px;
         }
         .button-cancel:hover { 
@@ -272,11 +315,19 @@ $all_tags_json = json_encode($tags);
 </head>
 <body>
     <div class="top-bar">
-        <strong>Zalogowany jako:</strong> <?= htmlspecialchars($_SESSION["username"]) ?> |
-        <a href="logout.php">Wyloguj</a>
+        <strong>Zalogowany jako:</strong> <?= htmlspecialchars($_SESSION["username"]) ?>
+        
+        <div class="dropdown">
+            <button onclick="toggleMenu()" class="dropbtn">&#9776;</button>
+            <div id="myDropdown" class="dropdown-content">
+                <a href="#" onclick="filterMyNotes()">👤 Mój Profil (moje notatki)</a>
+                <a href="#" onclick="showAllNotes()">🌍 Wszystkie Notatki</a>
+                <a href="logout.php" class="logout-link">Wyloguj</a>
+            </div>
+        </div>
     </div>
 
-    <h1>📚 System Notatek Studenckich</h1>
+    <h1 id="pageTitle"><?= $pageTitle ?></h1>
 
     <div class="form">
         <textarea id="noteText" placeholder="Treść notatki..." required></textarea>
@@ -302,56 +353,43 @@ $all_tags_json = json_encode($tags);
     <div id="noteModal" class="modal">
         <div class="modal-content">
             <span class="close-btn" onclick="closeModal()">&times;</span>
-
             <div id="modalView">
                 <h3 id="modalTag"></h3>
                 <p id="modalText"></p>
                 <button id="openFileBtn" class="file-link" style="display:none;">📂 Pobierz plik</button>
-                
                 <button id="editBtn" onclick="switchToEditMode()" class="button-edit">✏️ Edytuj</button>
             </div>
-
             <div id="modalEdit" style="display: none;">
                 <h3>Edytuj Notatkę</h3>
-                
                 <input type="hidden" id="editNoteId">
-                
                 <label for="editTagSelect">Tag:</label>
                 <select id="editTagSelect" required></select>
-                
                 <label for="editNoteText">Treść:</label>
                 <textarea id="editNoteText" rows="5"></textarea>
-                
                 <label for="editNoteFile">Zastąp plik (opcjonalne):</label>
                 <input type="file" id="editNoteFile" accept=".pdf,.jpg,.jpeg,.png,.gif,.txt,.doc,.docx">
                 <small id="currentFileDisplay" style="display: block; color: #555; margin-top: 5px;"></small>
-
                 <button onclick="saveChanges()">Zapisz zmiany</button>
                 <button onclick="switchToViewMode()" class="button-cancel">Anuluj</button>
             </div>
         </div>
     </div>
 
-
-   <script>
-    // 1. Zmienne globalne
+    <script>
     const userNotesFromDB = <?= json_encode($user_notes); ?>;
     const allTagsFromDB = <?= $all_tags_json; ?>; 
-    // NOWOŚĆ: Przekazanie ID zalogowanego użytkownika do JS
     const loggedInUserId = <?= $loggedInUserId; ?>;
-    
     const folders = {};
     let currentNote = null; 
 
-    // 2. Inicjalizacja folderów notatkami z PHP
     function initializeFolders(notes) {
+        Object.keys(folders).forEach(key => delete folders[key]);
         notes.forEach(note => {
             const tag = note.tag.toLowerCase(); 
             if (!folders[tag]) folders[tag] = [];
-            
             folders[tag].push({
                 id: note.id,
-                author_id: note.author_id, // NOWOŚĆ: Przechowujemy ID autora
+                author_id: note.author_id,
                 text: note.text,
                 fileName: note.filePath ? note.filePath.split('/').pop() : null,
                 filePath: note.filePath
@@ -362,7 +400,6 @@ $all_tags_json = json_encode($tags);
     
     initializeFolders(userNotesFromDB);
 
-    // 3. Funkcja dodawania nowej notatki (bez zmian)
     async function addNote() {
         const text = document.getElementById("noteText").value.trim();
         const tagSelect = document.getElementById("noteTags"); 
@@ -391,7 +428,7 @@ $all_tags_json = json_encode($tags);
             const result = await response.json();
             if (result.success) {
                 alert("Notatka została zapisana pomyślnie!");
-                window.location.reload(); 
+                window.location.href = window.location.pathname + '?view=my';
             } else {
                 alert("Błąd podczas zapisywania notatki: " + result.message);
             }
@@ -401,7 +438,6 @@ $all_tags_json = json_encode($tags);
         }
     }
 
-    // 4. Funkcja renderująca foldery (bez zmian)
     function renderFolders() {
         const container = document.getElementById("foldersContainer");
         container.innerHTML = "";
@@ -429,19 +465,13 @@ $all_tags_json = json_encode($tags);
         });
     }
 
-    // 5. Logika Modala (Widok / Edycja)
-    
-    // ZMIANA: openModal musi teraz sprawdzać uprawnienia
     function openModal(tag, note) {
         currentNote = note; 
-
-        // Ustawiamy tryb widoku
         document.getElementById("modalTag").textContent = `#${tag}`;
         document.getElementById("modalText").textContent = note.text || "(brak treści)";
         const openFileBtn = document.getElementById("openFileBtn");
-        const editBtn = document.getElementById("editBtn");
+        const editBtn = document.getElementById("editBtn"); 
 
-        // Logika pobierania pliku
         if (note.filePath) {
             openFileBtn.style.display = "inline-block";
             openFileBtn.textContent = `📂 Pobierz plik (${note.fileName})`;
@@ -450,11 +480,10 @@ $all_tags_json = json_encode($tags);
             openFileBtn.style.display = "none";
         }
         
-        // KLUCZOWA ZMIANA: Pokaż przycisk "Edytuj" tylko jeśli ID autora zgadza się z ID zalogowanego
         if (note.author_id === loggedInUserId) {
-            editBtn.style.display = "inline-block"; // Pokaż przycisk
+            editBtn.style.display = "inline-block"; 
         } else {
-            editBtn.style.display = "none"; // Ukryj przycisk
+            editBtn.style.display = "none"; 
         }
         
         switchToViewMode(); 
@@ -468,17 +497,41 @@ $all_tags_json = json_encode($tags);
     
     window.onclick = function (event) {
         const modal = document.getElementById("noteModal");
-        if (event.target === modal) closeModal();
+        if (event.target === modal) {
+            closeModal();
+        }
+
+        if (!event.target.matches('.dropbtn')) {
+            var dropdowns = document.getElementsByClassName("dropdown-content");
+            for (var i = 0; i < dropdowns.length; i++) {
+                var openDropdown = dropdowns[i];
+                if (openDropdown.classList.contains('show')) {
+                    openDropdown.classList.remove('show');
+                }
+            }
+        }
     };
+
+    function toggleMenu() {
+        document.getElementById("myDropdown").classList.toggle("show");
+    }
+
+    function filterMyNotes() {
+        const myNotes = userNotesFromDB.filter(note => note.author_id === loggedInUserId);
+        initializeFolders(myNotes); 
+        document.getElementById("pageTitle").textContent = "👤 Moje Notatki";
+    }
+
+    function showAllNotes() {
+        initializeFolders(userNotesFromDB); 
+        document.getElementById("pageTitle").textContent = "📚 Wszystkie Notatki";
+    }
 
     function switchToViewMode() {
         document.getElementById("modalView").style.display = "block";
         document.getElementById("modalEdit").style.display = "none";
     }
 
-    // Reszta funkcji (switchToEditMode, saveChanges) pozostaje bez zmian,
-    // ponieważ skrypt update_note.php i tak zweryfikuje autora po stronie serwera.
-    
     function switchToEditMode() {
         if (!currentNote) return;
 
@@ -487,7 +540,6 @@ $all_tags_json = json_encode($tags);
         
         const tagSelect = document.getElementById("editTagSelect");
         tagSelect.innerHTML = ""; 
-        
         const currentTagFromNote = (Object.keys(folders).find(key => folders[key].some(n => n.id === currentNote.id)) || '');
 
         allTagsFromDB.forEach(tag => {
@@ -539,11 +591,7 @@ $all_tags_json = json_encode($tags);
         }
 
         try {
-            const response = await fetch('update_note.php', {
-                method: 'POST',
-                body: formData
-            });
-            
+            const response = await fetch('update_note.php', { method: 'POST', body: formData });
             const result = await response.json();
             
             if (result.success) {
@@ -557,6 +605,17 @@ $all_tags_json = json_encode($tags);
             alert("Błąd komunikacji z serwerem (update_note.php).");
         }
     }
+
+    // Sprawdzenie URL i ewentualne filtrowanie przy starcie
+    (function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('view') === 'my') {
+            filterMyNotes();
+        } else {
+            showAllNotes(); 
+        }
+    })();
+
 </script>
 </body>
 </html>
