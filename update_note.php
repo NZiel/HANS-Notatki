@@ -9,6 +9,7 @@ if (!isset($_SESSION["user_id"])) {
 }
 
 $user_id = $_SESSION["user_id"];
+$isAdmin = isset($_SESSION["is_admin"]) && $_SESSION["is_admin"] === true;
 
 // 2. Dane do połączenia i konfiguracja
 $servername = "localhost";
@@ -33,16 +34,14 @@ try {
         throw new Exception("Błąd połączenia z bazą: " . $conn->connect_error);
     }
 
-    // 4. BEZPIECZEŃSTWO: Sprawdzenie, czy notatka należy do użytkownika
-    //    i pobranie ścieżki do starego pliku (jeśli istnieje)
-    $stmt_check = $conn->prepare("SELECT file_path FROM notes WHERE id = ? AND user_id = ?");
-    $stmt_check->bind_param("ii", $note_id, $user_id);
+    // 4. BEZPIECZEŃSTWO: Pobranie notatki po ID (bez sprawdzania user_id na razie)
+    $stmt_check = $conn->prepare("SELECT user_id, file_path FROM notes WHERE id = ?");
+    $stmt_check->bind_param("i", $note_id);
     $stmt_check->execute();
     $result_check = $stmt_check->get_result();
 
     if ($result_check->num_rows === 0) {
-        // Jeśli nie znaleziono notatki lub użytkownik nie jest właścicielem
-        echo json_encode(["success" => false, "message" => "Błąd: Nie masz uprawnień do edycji tej notatki."]);
+        echo json_encode(["success" => false, "message" => "Błąd: Notatka nie istnieje."]);
         $stmt_check->close();
         $conn->close();
         exit;
@@ -50,16 +49,25 @@ try {
     
     $row = $result_check->fetch_assoc();
     $oldFilePath = $row['file_path']; // Ścieżka do starego pliku
+    $note_owner_id = $row['user_id']; // ID autora notatki
     $stmt_check->close();
 
-    // 5. Inicjalizacja zapytania UPDATE
+    // 5. NOWE SPRAWDZENIE UPRAWNIEŃ:
+    //    Pozwól na edycję, jeśli użytkownik jest właścicielem LUB jest adminem
+    if ($note_owner_id != $user_id && !$isAdmin) {
+        echo json_encode(["success" => false, "message" => "Błąd: Nie masz uprawnień do edycji tej notatki."]);
+        $conn->close();
+        exit;
+    }
+
+    // 6. Inicjalizacja zapytania UPDATE
     $sql = "UPDATE notes SET title = ?, content = ?";
     $params = [$title, $content];
     $types = "ss"; // s = string, i = integer
     
     $newFilePathForDB = null;
 
-    // 6. Obsługa ZASTĄPIENIA pliku (jeśli nowy plik został przesłany)
+    // 7. Obsługa ZASTĄPIENIA pliku (jeśli nowy plik został przesłany)
     if (isset($_FILES['noteFile']) && $_FILES['noteFile']['error'] === UPLOAD_ERR_OK) {
         $file = $_FILES['noteFile'];
         $fileExtension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
@@ -71,7 +79,8 @@ try {
         }
 
         // Tworzenie unikalnej nazwy i przenoszenie
-        $uniqueFileName = uniqid($user_id . '_', true) . '.' . $fileExtension;
+        // Używamy $note_owner_id, aby plik był powiązany z autorem, lub $user_id (admina), bez znaczenia
+        $uniqueFileName = uniqid($note_owner_id . '_', true) . '.' . $fileExtension;
         $targetPath = $uploadDir . $uniqueFileName;
 
         if (move_uploaded_file($file['tmp_name'], $targetPath)) {
@@ -91,14 +100,22 @@ try {
         }
     }
 
-    // 7. Finalizowanie i wykonanie zapytania UPDATE
-    $sql .= ", updated_at = NOW() WHERE id = ? AND user_id = ?";
+    // 8. ZMODYFIKOWANE Finalizowanie i wykonanie zapytania UPDATE
+    //    Klauzula WHERE jest teraz dynamiczna
+    
+    $sql .= ", updated_at = NOW() WHERE id = ?";
     $params[] = $note_id;
-    $params[] = $user_id;
-    $types .= "ii";
+    $types .= "i";
+
+    // Jeśli użytkownik NIE jest adminem, dodajemy dodatkowe zabezpieczenie
+    if (!$isAdmin) {
+        $sql .= " AND user_id = ?";
+        $params[] = $user_id; // $user_id (zalogowany) jest taki sam jak $note_owner_id
+        $types .= "i";
+    }
+    // Admin zaktualizuje notatkę tylko na podstawie 'WHERE id = ?'
 
     $stmt_update = $conn->prepare($sql);
-    // Użycie operatora "splat" (...), aby dynamicznie powiązać parametry
     $stmt_update->bind_param($types, ...$params); 
 
     if ($stmt_update->execute()) {

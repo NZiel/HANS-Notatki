@@ -14,6 +14,7 @@ $dbname = "hans";
 $tags = []; 
 $user_notes = [];
 $loggedInUserId = $_SESSION["user_id"];
+$isAdmin = isset($_SESSION["is_admin"]) && $_SESSION["is_admin"] === true; // Flaga Admina
 // Domyślny tytuł strony
 $pageTitle = "📚 Wszystkie Notatki"; 
 
@@ -311,6 +312,15 @@ $all_tags_json = json_encode($tags);
         .button-cancel:hover { 
             background: #4b5563; 
         }
+        
+        .button-delete {
+            background: #ef4444; /* Czerwony */
+            margin-left: 10px;
+            margin-top: 15px;
+        }
+        .button-delete:hover {
+            background: #dc2626;
+        }
     </style>
 </head>
 <body>
@@ -358,6 +368,7 @@ $all_tags_json = json_encode($tags);
                 <p id="modalText"></p>
                 <button id="openFileBtn" class="file-link" style="display:none;">📂 Pobierz plik</button>
                 <button id="editBtn" onclick="switchToEditMode()" class="button-edit">✏️ Edytuj</button>
+                <button id="deleteBtn" onclick="deleteNote()" class="button-delete">🗑️ Usuń</button>
             </div>
             <div id="modalEdit" style="display: none;">
                 <h3>Edytuj Notatkę</h3>
@@ -379,6 +390,7 @@ $all_tags_json = json_encode($tags);
     const userNotesFromDB = <?= json_encode($user_notes); ?>;
     const allTagsFromDB = <?= $all_tags_json; ?>; 
     const loggedInUserId = <?= $loggedInUserId; ?>;
+    const isAdmin = <?= $isAdmin ? 'true' : 'false'; ?>; // Flaga Admina w JS
     const folders = {};
     let currentNote = null; 
 
@@ -428,7 +440,8 @@ $all_tags_json = json_encode($tags);
             const result = await response.json();
             if (result.success) {
                 alert("Notatka została zapisana pomyślnie!");
-                window.location.href = window.location.pathname + '?view=my';
+                // Zmieniono z 'view=my' na ponowne załadowanie bieżącego widoku
+                window.location.reload(); 
             } else {
                 alert("Błąd podczas zapisywania notatki: " + result.message);
             }
@@ -471,6 +484,7 @@ $all_tags_json = json_encode($tags);
         document.getElementById("modalText").textContent = note.text || "(brak treści)";
         const openFileBtn = document.getElementById("openFileBtn");
         const editBtn = document.getElementById("editBtn"); 
+        const deleteBtn = document.getElementById("deleteBtn"); // Przycisk Usuń
 
         if (note.filePath) {
             openFileBtn.style.display = "inline-block";
@@ -480,10 +494,13 @@ $all_tags_json = json_encode($tags);
             openFileBtn.style.display = "none";
         }
         
-        if (note.author_id === loggedInUserId) {
+        // ZMODYFIKOWANA LOGIKA: Pokaż przyciski jeśli user jest autorem LUB jest adminem
+        if (note.author_id === loggedInUserId || isAdmin) {
             editBtn.style.display = "inline-block"; 
+            deleteBtn.style.display = "inline-block";
         } else {
             editBtn.style.display = "none"; 
+            deleteBtn.style.display = "none";
         }
         
         switchToViewMode(); 
@@ -570,13 +587,7 @@ $all_tags_json = json_encode($tags);
         const newTag = document.getElementById("editTagSelect").value;
         const fileInput = document.getElementById("editNoteFile");
 
-        if (!newText && !fileInput.files[0]) {
-            if (!newTag) {
-                 alert("Tag nie może być pusty!");
-                 return;
-            }
-        }
-        if(!newTag){
+        if (!newTag) {
             alert("Tag nie może być pusty!");
             return;
         }
@@ -603,6 +614,33 @@ $all_tags_json = json_encode($tags);
         } catch (error) {
             console.error("Błąd fetch:", error);
             alert("Błąd komunikacji z serwerem (update_note.php).");
+        }
+    }
+
+    // NOWA FUNKCJA DO USUWANIA
+    async function deleteNote() {
+        if (!currentNote) return;
+        
+        if (!confirm("Czy na pewno chcesz usunąć tę notatkę? Tej akcji nie można cofnąć.")) {
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('note_id', currentNote.id);
+
+        try {
+            const response = await fetch('delete_note.php', { method: 'POST', body: formData });
+            const result = await response.json();
+            
+            if (result.success) {
+                alert("Notatka została usunięta.");
+                window.location.reload(); // Przeładuj stronę, aby zobaczyć zmiany
+            } else {
+                alert("Błąd podczas usuwania: " + result.message);
+            }
+        } catch (error) {
+            console.error("Błąd fetch (delete_note.php):", error);
+            alert("Błąd komunikacji z serwerem (delete_note.php).");
         }
     }
 

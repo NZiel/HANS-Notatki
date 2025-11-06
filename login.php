@@ -1,6 +1,6 @@
 <?php
 session_start();
-require "db.php";
+require "db.php"; // Zakładam, że db.php jest w tym samym katalogu
 
 $message = "";
 
@@ -8,23 +8,50 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $username = trim($_POST["username"]);
     $password = $_POST["password"];
 
-    $stmt = $conn->prepare("SELECT id, password FROM users WHERE username = ?");
-    $stmt->bind_param("s", $username);
-    $stmt->execute();
-    $res = $stmt->get_result();
+    // 1. Spróbuj zalogować jako zwykły użytkownik
+    $stmt_user = $conn->prepare("SELECT id, password FROM users WHERE username = ?");
+    $stmt_user->bind_param("s", $username);
+    $stmt_user->execute();
+    $res_user = $stmt_user->get_result();
 
-    if ($user = $res->fetch_assoc()) {
+    if ($user = $res_user->fetch_assoc()) {
         if (password_verify($password, $user["password"])) {
+            // Zalogowano jako użytkownik
             $_SESSION["user_id"] = $user["id"];
             $_SESSION["username"] = $username;
+            $_SESSION["is_admin"] = false; // Ważne: ustawiamy na false
             header("Location: test.php");
             exit;
         } else {
             $message = "❌ Nieprawidłowe hasło.";
         }
     } else {
-        $message = "❌ Użytkownik nie istnieje.";
+        // 2. Jeśli nie znaleziono użytkownika, spróbuj zalogować jako admin
+        // Użyj `admin_name` zgodnie z Twoją strukturą bazy
+        $stmt_admin = $conn->prepare("SELECT id, password FROM admin WHERE admin_name = ?");
+        $stmt_admin->bind_param("s", $username);
+        $stmt_admin->execute();
+        $res_admin = $stmt_admin->get_result();
+
+        if ($admin = $res_admin->fetch_assoc()) {
+            if (password_verify($password, $admin["password"])) {
+                // Zalogowano jako ADMIN
+                $_SESSION["user_id"] = $admin["id"]; // ID admina
+                $_SESSION["username"] = $username;   // Nazwa admina
+                $_SESSION["is_admin"] = true;      // Kluczowa flaga!
+                header("Location: test.php");
+                exit;
+            } else {
+                $message = "❌ Nieprawidłowe hasło.";
+            }
+        } else {
+            // Nie znaleziono ani użytkownika, ani admina
+            $message = "❌ Użytkownik o tej nazwie nie istnieje.";
+        }
+        $stmt_admin->close();
     }
+    $stmt_user->close();
+    $conn->close();
 }
 ?>
 
@@ -34,6 +61,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <meta charset="UTF-8">
 <title>Logowanie</title>
 <style>
+/* ... (twoje style CSS bez zmian) ... */
 body {
   font-family: Arial;
   background: #f1f5f9;
