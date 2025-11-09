@@ -16,8 +16,8 @@ $servername = "localhost";
 $username = "root"; 
 $password = "";
 $dbname = "hans";
-// $uploadDir jest potrzebny tylko jeśli usuwamy pliki, ale lepiej mieć pełną ścieżkę
-$baseDir = __DIR__; // Główny katalog skryptu
+// Używamy __DIR__ aby ścieżki były bezwzględne
+$baseDir = __DIR__; 
 
 // 3. Pobranie ID notatki
 $note_id = isset($_POST['note_id']) ? intval($_POST['note_id']) : 0;
@@ -33,25 +33,25 @@ try {
         throw new Exception("Błąd połączenia z bazą: " . $conn->connect_error);
     }
 
-    // 4. Sprawdzenie uprawnień (pobranie ID autora i ścieżki pliku)
+    // 4. Pobranie danych do weryfikacji i ścieżki pliku
     $stmt_check = $conn->prepare("SELECT user_id, file_path FROM notes WHERE id = ?");
     $stmt_check->bind_param("i", $note_id);
     $stmt_check->execute();
     $result_check = $stmt_check->get_result();
-
+    
     if ($result_check->num_rows === 0) {
-        echo json_encode(["success" => false, "message" => "Notatka nie istnieje."]);
-        $stmt_check->close();
+        // Jeśli notatka nie istnieje, traktujemy to jako sukces, aby uniknąć błędów
+        echo json_encode(["success" => true, "message" => "Notatka już usunięta."]);
         $conn->close();
         exit;
     }
 
     $row = $result_check->fetch_assoc();
     $note_owner_id = $row['user_id'];
-    $filePath = $row['file_path']; // np. 'uploads/nazwapliku.jpg'
+    $filePath = $row['file_path']; 
     $stmt_check->close();
 
-    // 5. Weryfikacja: Zezwól na usunięcie, jeśli user jest właścicielem LUB adminem
+    // 5. Weryfikacja uprawnień: Zezwól na usunięcie, jeśli user jest właścicielem LUB adminem
     if ($note_owner_id != $user_id && !$isAdmin) {
         echo json_encode(["success" => false, "message" => "Brak uprawnień do usunięcia tej notatki."]);
         $conn->close();
@@ -59,28 +59,27 @@ try {
     }
 
     // 6. Usuwanie z bazy danych
-    // Używamy tylko ID notatki, ponieważ uprawnienia zostały już sprawdzone.
     $stmt_delete = $conn->prepare("DELETE FROM notes WHERE id = ?");
     $stmt_delete->bind_param("i", $note_id);
     
     if ($stmt_delete->execute()) {
         // 7. Usunięcie pliku z serwera, jeśli istniał
         if ($filePath) {
-            // Budujemy pełną, bezwzględną ścieżkę do pliku
+            // Budujemy pełną ścieżkę do pliku
             $absolutePath = $baseDir . '/' . $filePath; 
             if (file_exists($absolutePath)) {
+                // Usuwamy plik
                 unlink($absolutePath);
             }
         }
-        echo json_encode(["success" => true, "message" => "Notatka usunięta."]);
+        echo json_encode(["success" => true, "message" => "Notatka i plik usunięte pomyślnie."]);
     } else {
-        echo json_encode(["success" => false, "message" => "Błąd podczas usuwania z bazy danych."]);
+        throw new Exception("Błąd wykonania zapytania usuwania: " . $conn->error);
     }
 
-    $stmt_delete->close();
-    $conn->close();
-
 } catch (Exception $e) {
-    echo json_encode(["success" => false, "message" => "Wystąpił błąd serwera: " . $e->getMessage()]);
+    echo json_encode(["success" => false, "message" => $e->getMessage()]);
+} finally {
+    if (isset($conn)) $conn->close();
 }
 ?>
