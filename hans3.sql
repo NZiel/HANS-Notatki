@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Lis 13, 2025 at 01:34 PM
+-- Generation Time: Lis 13, 2025 at 01:48 PM
 -- Wersja serwera: 10.4.32-MariaDB
 -- Wersja PHP: 8.2.12
 
@@ -94,7 +94,7 @@ INSERT INTO `notes` (`id`, `user_id`, `title`, `content`, `file_path`, `created_
 (12, 7, 'Całki', 'Całkowanie jest działaniem odwrotnym do różniczkowania.\r\nŻeby sprawnie liczyć całki, należy wcześniej dobrze opanować liczenie pochodnych. Znaczek dx oznacza, że całkujemy funkcję f(x) po zmiennej x (i tak symbolicznie zamyka operację całkowania). Przy liczeniu prostych całek symbol dx na nic nie wpływa, ale należy go pisać ze względów formalnych. Do całkowania prostych funkcji wykorzystujemy wzory całkowe, które są również przydatne przy liczeniu całek bardziej skomplikowanych funkcji.', 'uploads/e15489de268552a0cf614fe2edc9525c8fd36ba9aeac9be6a4c7dc30c32ec49c.jpg', '2025-11-09 13:26:34', '2025-11-09 13:26:34'),
 (13, 7, 'Ruch wahadłowy', 'Ruch wahadłowy to taki, który występuje w obiekcie z jednej strony na drugą, zwisający z włókna, kabla lub nici. Siły, które interweniują w tym ruchu, to połączenie siły grawitacji (pionowej, w kierunku środka Ziemi) i napięcia nici (kierunek nici). To właśnie robią zegary wahadłowe (stąd jego nazwa) lub huśtawki na placu zabaw. W idealnym wahadle ruch oscylacyjny będzie trwał wiecznie. Jednak w prawdziwym wahadle ruch kończy się z czasem z powodu tarcia z powietrzem. Myślenie o wahadle nieuchronnie wywołuje obraz zegara wahadłowego, pamięci tego starego i imponującego zegara wiejskiego domu dziadków. A może opowieść o terrorze Edgara Allana Poe, studni i wahadle, której narrację inspiruje jedna z wielu metod tortur stosowanych przez hiszpańską inkwizycję.', NULL, '2025-11-09 13:28:15', '2025-11-09 13:28:15'),
 (16, 7, 'Krzysztof Kolumb', 'Kapitan wyprawy, która płynęła na trzech statkach: „Santa María”, „Niña” i „Pinta” pod flagą Kastylii w poszukiwaniu zachodniej drogi morskiej do wschodniej Azji[a]. Jako pierwsza wyprawa w historii nowożytnych odkryć geograficznych pokonała zwrotnikowy Ocean Atlantycki i 12 października 1492 dotarła do Indii Zachodnich u wybrzeży Ameryki – kontynentu nieznanego w ówczesnej Europie. Za dokonania został mianowany admirałem i pierwszym namiestnikiem hiszpańskich kolonii w Ameryce Środkowej. Organizator i kapitan czterech odkrywczych wypraw transatlantyckich z Hiszpanii do Ameryki.', 'uploads/55a17eda7da09bef2a3b8c5ef62e38664da38aa01f877693cf1487f6bc694eae.jpg', '2025-11-09 13:32:19', '2025-11-09 13:32:19'),
-(17, 1, 'Test dźwięku', 'Uwaga Natala testuje dźwięk', 'uploads/a3752543791d0dd17c5ab19926f82e671870ee4ae0667b7b114464066bb19081.mp3', '2025-11-13 13:31:22', '2025-11-13 13:34:21');
+(17, 1, 'Test dźwięku', 'Uwaga Natala testuje dźwięk.\r\n\r\n/EDIT \r\nTrzeba poprawić, by nazwy plików się nie zmieniały na kilometrowy ciąg znaków. Może uda się lepiej odtwarzanie zrobić też.\r\n/EDIT2\r\nNuta ukradziona od mojego basisty 😈😈', 'uploads/a3752543791d0dd17c5ab19926f82e671870ee4ae0667b7b114464066bb19081.mp3', '2025-11-13 13:31:22', '2025-11-13 13:48:09');
 
 -- --------------------------------------------------------
 
@@ -249,7 +249,7 @@ ALTER TABLE `notes`
 -- AUTO_INCREMENT for table `tags`
 --
 ALTER TABLE `tags`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
 
 --
 -- AUTO_INCREMENT for table `users`
