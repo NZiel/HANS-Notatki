@@ -26,6 +26,17 @@ body {
   font-size: 20px;
   font-weight: bold;
 }
+/* --- LOGO W NAGŁÓWKU --- */
+.header-container .logo {
+  display: flex;
+  align-items: center;
+  gap: 15px; /* odstęp między obrazkiem a tekstem */
+}
+
+.header-container .logo img {
+  max-height: 65px;   /* zmniejsza logo */
+  width: auto;
+}
 
 .auth-controls {
     display: flex;
@@ -182,9 +193,8 @@ body {
 /* -------------------------------------- */
 /* --- STYLE DLA MODALA --- */
 /* -------------------------------------- */
-
 .modal {
-    display: flex; 
+    display: none;            /* ← KLUCZOWE! */
     position: fixed; 
     z-index: 1000; 
     left: 0;
@@ -195,6 +205,12 @@ body {
     align-items: center; 
     justify-content: center;
 }
+
+/* Modal WIDOCZNY */
+.modal.active {
+    display: flex;            /* ← Pokazuje modal */
+}
+
 .modal-content {
     background-color: white; 
     padding: 0; 
@@ -206,7 +222,6 @@ body {
     overflow: hidden; 
 }
 
-/* Stylizacja NAGŁÓWKA MODALA */
 .modal-header-styled {
     background: #8faee5; 
     color: white;
@@ -224,11 +239,14 @@ body {
     font-weight: bold;
     cursor: pointer;
     line-height: 1;
-    position: static; 
     margin-left: 10px;
 }
 .close-btn:hover {
     color: #e0e7ff;
+}
+
+.modal-body-styled {
+    padding: 30px; 
 }
 
 /* Nowy kontener na treść modala (KLUCZOWA SEKCJA PADDINGU) */

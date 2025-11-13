@@ -19,10 +19,20 @@ if (!isset($_SESSION["user_id"])) {
     }
 
     h1 {
-      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;            /* odstęp między logo a tekstem */
       color: #2563eb;
       margin-bottom: 20px;
     }
+
+    /* styl samego logo */
+    .logo-img {
+      height: 40px;         /* możesz zwiększyć/zmniejszyć */
+      width: auto;
+    }
+
 
     .top-bar {
       text-align: right;
@@ -178,12 +188,15 @@ if (!isset($_SESSION["user_id"])) {
     <a href="logout.php">Wyloguj</a>
   </div>
 
-  <h1>📚 System Notatek Studenckich</h1>
+  <h1>
+  <img src="LOGOH.png" alt="Logo systemu" class="logo-img">
+  System Notatek Studenckich
+  </h1>
 
   <div class="form">
     <textarea id="noteText" placeholder="Treść notatki..." required></textarea>
     <input type="text" id="noteTags" placeholder="Tagi (np. matematyka, fizyka)" required />
-    <input type="file" id="noteFile" accept=".pdf,.jpg,.png" />
+    <input type="file" id="noteFile" accept=".pdf,.jpg,.png,.mp3" />
     <button onclick="addNote()">Dodaj notatkę</button>
   </div>
 
@@ -196,6 +209,10 @@ if (!isset($_SESSION["user_id"])) {
       <h3 id="modalTag"></h3>
       <p id="modalText"></p>
       <button id="openFileBtn" class="file-link" style="display:none;">📂 Otwórz załącznik</button>
+      <audio id="audioPlayer" controls style="display:none; width: 100%; margin-top: 10px;">
+    Twoja przeglądarka nie obsługuje odtwarzacza audio.
+</audio>
+
     </div>
   </div>
 
@@ -278,23 +295,38 @@ if (!isset($_SESSION["user_id"])) {
 
     // Modal
     function openModal(tag, note) {
-      document.getElementById("modalTag").textContent = `#${tag}`;
-      document.getElementById("modalText").textContent = note.text || "(brak treści)";
-      const openFileBtn = document.getElementById("openFileBtn");
+    const modalTag = document.getElementById("modalTag");
+    const modalText = document.getElementById("modalText");
+    const openFileBtn = document.getElementById("openFileBtn");
+    const audioPlayer = document.getElementById("audioPlayer");
 
-      if (note.fileBlob) {
-        openFileBtn.style.display = "inline-block";
-        openFileBtn.textContent = `📂 Otwórz plik (${note.fileName})`;
-        openFileBtn.onclick = () => {
-          const blobUrl = URL.createObjectURL(note.fileBlob);
-          window.open(blobUrl, "_blank");
-        };
-      } else {
-        openFileBtn.style.display = "none";
-      }
+    modalTag.textContent = `#${tag}`;
+    modalText.textContent = note.text || "(brak treści)";
 
-      document.getElementById("noteModal").style.display = "flex";
+    // Ukrywamy wszystko na start
+    openFileBtn.style.display = "none";
+    audioPlayer.style.display = "none";
+
+    if (note.fileBlob) {
+        const fileName = note.fileName.toLowerCase();
+        const blobUrl = URL.createObjectURL(note.fileBlob);
+
+        if (fileName.endsWith(".mp3")) {
+            // 🔊 ODTWARZACZ AUDIO
+            audioPlayer.style.display = "block";
+            audioPlayer.src = blobUrl;
+        } else {
+            // 📂 PRZYCISK ODWARCIA
+            openFileBtn.style.display = "inline-block";
+            openFileBtn.textContent = `📂 Otwórz plik (${note.fileName})`;
+            openFileBtn.onclick = () => {
+                window.open(blobUrl, "_blank");
+            };
+        }
     }
+
+    document.getElementById("noteModal").style.display = "flex";
+}
 
     function closeModal() {
       document.getElementById("noteModal").style.display = "none";

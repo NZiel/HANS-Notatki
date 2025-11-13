@@ -132,7 +132,10 @@ $jsNotes = json_encode($user_notes);
 <body>
 
 <header class="header-container">
-    <div class="logo">System do zarządzania notatkami studenckimi</div>
+    <div class="logo">
+        <img src="LOGOH.png" alt="Logo systemu" class="logo-img">
+        <span>System do zarządzania notatkami studenckimi</span>
+    </div>
     <div class="auth-controls">
         <?php if ($isAdmin): ?>
             <span>(ADMIN)</span>

@@ -36,7 +36,7 @@ $tagsArray = array_filter(array_map('trim', explode(',', $tagsInput)));
 if (isset($_FILES['noteFile']) && $_FILES['noteFile']['error'] === UPLOAD_ERR_OK) {
     $file = $_FILES['noteFile'];
     $fileExtension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-    $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'txt', 'doc', 'docx'];
+    $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'txt', 'doc', 'docx', 'mp3'];
 
     if (!in_array($fileExtension, $allowedExtensions)) {
         echo json_encode(["success" => false, "message" => "Błąd: Niedozwolony typ pliku."]);

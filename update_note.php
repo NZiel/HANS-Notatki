@@ -75,7 +75,7 @@ try {
         
         $file = $_FILES['newNoteFile'];
         $fileExtension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-        $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'txt', 'doc', 'docx'];
+        $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'txt', 'doc', 'docx', 'mp3'];
 
         if (!in_array($fileExtension, $allowedExtensions)) {
             throw new Exception("Błąd: Niedozwolony typ nowego pliku.");
