@@ -34,7 +34,7 @@ body {
 }
 
 .header-container .logo img {
-  max-height: 65px;   /* zmniejsza logo */
+  max-height: 45px;   /* zmniejsza logo */
   width: auto;
 }
 
