@@ -6,10 +6,10 @@ if (!isset($_SESSION["user_id"])) {
 }
 
 // 1. DANE DO POŁĄCZENIA Z BAZĄ DANYCH
-$servername = "localhost";
-$username = "root"; 
-$password = ""; 
-$dbname = "hans";
+$servername = "sql210.infinityfree.com";
+$username = "if0_40501421";
+$password = "OghgrrgghMG7eF"; // Użyj hasła do cPanelu!
+$dbname = "if0_40501421_Hans";
 
 $tags = []; 
 $user_notes = [];
@@ -204,8 +204,8 @@ $jsNotes = json_encode($user_notes);
         <div class="info-module-box">
             <div class="module-header">Nawigacja</div>
             <div class="module-content" id="tagList">
-                <a href="test.php">Wszystkie notatki</a>
-                <a href="test.php?filter=my">👤 Moje Notatki</a>
+                <a href="index.php">Wszystkie notatki</a>
+                <a href="index.php?filter=my">👤 Moje Notatki</a>
                 <a href="profile.php">⚙️ Profil</a>
             </div>
         </div>
@@ -359,7 +359,7 @@ $jsNotes = json_encode($user_notes);
         // Tutaj upraszczamy: po prostu dodajemy nowe po istniejących
         allTags.forEach(tag => {
             const link = document.createElement('a');
-            link.href = `test.php?tag=${encodeURIComponent(tag)}`;
+            link.href = `index.php?tag=${encodeURIComponent(tag)}`;
             link.textContent = `#${tag}`;
             tagList.appendChild(link);
         });

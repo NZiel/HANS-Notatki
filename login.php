@@ -20,7 +20,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $_SESSION["user_id"] = $user["id"];
             $_SESSION["username"] = $username;
             $_SESSION["is_admin"] = false; // Ważne: ustawiamy na false
-            header("Location: test.php");
+            header("Location: index.php");
             exit;
         } else {
             $message = "❌ Nieprawidłowe hasło.";
@@ -39,7 +39,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $_SESSION["user_id"] = $admin["id"]; // ID admina
                 $_SESSION["username"] = $username;   // Nazwa admina
                 $_SESSION["is_admin"] = true;      // Kluczowa flaga!
-                header("Location: test.php");
+                header("Location: index.php");
                 exit;
             } else {
                 $message = "❌ Nieprawidłowe hasło.";
